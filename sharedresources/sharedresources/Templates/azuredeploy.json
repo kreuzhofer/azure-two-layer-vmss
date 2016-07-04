@@ -21,10 +21,16 @@
                 "description": "Object Id of the AAD user or service principal that will have access to the vault. Available from the Get-AzureRMADUser or the Get-AzureRMADServicePrincipal cmdlets"
             }
         },
-        "installScriptParameters": {
+        "installScriptParameters_l1": {
             "type": "securestring",
             "metadata": {
-                "description": "Parameters to pass into the installation script"
+                "description": "Parameters to pass into the installation script for layer 1"
+            }
+        },
+        "installScriptParameters_l2": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Parameters to pass into the installation script for layer 2"
             }
         }
     },
@@ -107,10 +113,21 @@
             "resources": [
                 {
                     "type": "secrets",
-                    "name": "installScriptParameters",
+                    "name": "installScriptParameters-l1",
                     "apiVersion": "2015-06-01",
                     "properties": {
-                        "value": "[parameters('installScriptParameters')]"
+                        "value": "[parameters('installScriptParameters_l1')]"
+                    },
+                    "dependsOn": [
+                        "[concat('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "name": "installScriptParameters-l2",
+                    "apiVersion": "2015-06-01",
+                    "properties": {
+                        "value": "[parameters('installScriptParameters_l2')]"
                     },
                     "dependsOn": [
                         "[concat('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]"
