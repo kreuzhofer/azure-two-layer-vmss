@@ -11,12 +11,17 @@
         },
         "vmSize_layer1": {
             "type": "string",
-            "defaultValue": "Standard_A1",
+            "defaultValue": "Standard_A4",
             "minLength": 1
         },
         "vmSize_layer2": {
             "type": "string",
-            "defaultValue": "Standard_A1",
+            "defaultValue": "Standard_A4",
+            "minLength": 1
+        },
+        "vmSize_jumphost": {
+            "type": "string",
+            "defaultValue": "Standard_A2",
             "minLength": 1
         },
         "ubuntuOSVersion": {
@@ -80,6 +85,8 @@
         }
     },
     "variables": {
+        "apiVersion": "2015-06-15",
+
         "location": "[resourceGroup().location]",
         "storageAccountType": "Standard_LRS",
 
@@ -96,7 +103,9 @@
 
         "_vnetName": "[concat(parameters('deploymentPrefix'), '-vnet')]",
         "vnet_id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('sharedResourceGroup'), '/providers/Microsoft.Network/virtualNetworks/', variables('_vnetName'))]",
-        "subnetName": "[concat(parameters('deploymentPrefix'), '-subnet')]",
+        "subnet01name": "[concat(parameters('deploymentPrefix'), '-subnet01')]",
+        "subnet02name": "[concat(parameters('deploymentPrefix'), '-subnet02')]",
+        "subnet03name": "[concat(parameters('deploymentPrefix'), '-subnet03')]",
         "_publicIPAddressName": "[concat(parameters('deploymentPrefix'), '-pip')]",
         "deliveryloadbalancerpip_addressid": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('sharedResourceGroup'), '/providers/Microsoft.Network/publicIPAddresses/', variables('_publicIPAddressName'))]",
 
@@ -106,7 +115,7 @@
         "bePoolName_l1": "[concat(parameters('deploymentPrefix'), '-bepool-l1')]",
         "nicName_l1": "[concat(parameters('deploymentPrefix'), '-nic-l1')]",
         "ipConfigName_l1": "[concat(parameters('deploymentPrefix'), '-ipconfig-l1')]",
-        "frontEndIPConfigID": "[concat(variables('lb_l1_ID'), '/frontendIPConfigurations/loadBalancerFrontEnd')]",
+        "frontEndIPConfigID_l1": "[concat(variables('lb_l1_ID'), '/frontendIPConfigurations/loadBalancerFrontEnd')]",
 
         "loadBalancerName_l2": "[concat(parameters('deploymentPrefix'), '-lb_l2')]",
         "lb_l2_ID": "[resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2'))]",
@@ -114,9 +123,10 @@
         "bePoolName_l2": "[concat(parameters('deploymentPrefix'), '-bepool-l2')]",
         "nicName_l2": "[concat(parameters('deploymentPrefix'), '-nic-l2')]",
         "ipConfigName_l2": "[concat(parameters('deploymentPrefix'), '-ipconfig-l2')]",
+        "frontEndIPConfigID_l2": "[concat(variables('lb_l2_ID'), '/frontendIPConfigurations/loadBalancerFrontEnd')]",
 
-        "vmscaleset_layer1name": "[concat(parameters('deploymentPrefix'), '-vmss-l1')]",
-        "vmscaleset_layer2name": "[concat(parameters('deploymentPrefix'), '-vmss-l2')]",
+        "vmscalesetname_l1": "[concat(parameters('deploymentPrefix'), '-vmss-l1')]",
+        "vmscalesetname_l2": "[concat(parameters('deploymentPrefix'), '-vmss-l2')]",
 
         "osType": {
             "publisher": "Canonical",
@@ -137,8 +147,13 @@
 
         "keyVaultName": "[concat(parameters('deploymentPrefix'), '-keyvault')]",
         "installationScriptFileName_l1": "[concat('run.sh',' ', parameters('scriptParameters_l1'))]",
-        "installationScriptFileName_l2": "[concat('run.sh',' ', parameters('scriptParameters_l2'))]"
+        "installationScriptFileName_l2": "[concat('run.sh',' ', parameters('scriptParameters_l2'))]",
 
+        "jumphostStorageAccountName": "[concat(parameters('deploymentPrefix'), 'jumphostsa')]",
+        "jumphostNicName": "[concat(parameters('deploymentPrefix'), 'jumphostnic')]",
+        "_publicIPAddressNameJumphost": "[concat(parameters('deploymentPrefix'), '-pipjh')]",
+        "pipjumphost_id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('sharedResourceGroup'), '/providers/Microsoft.Network/publicIPAddresses/', variables('_publicIPAddressNameJumphost'))]",
+        "jumphostVmName": "[concat(parameters('deploymentPrefix'), 'jumphost')]"
     },
     "resources": [
         {
@@ -152,6 +167,18 @@
             "copy": {
                 "name": "storageLoop",
                 "count": "[length(variables('uniqueStringArray'))]"
+            },
+            "properties": {
+                "accountType": "[variables('storageAccountType')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('jumphostStorageAccountName')]",
+            "location": "[variables('location')]",
+            "apiVersion": "2015-06-15",
+            "tags": {
+                "displayName": "JumphostStorageAccount"
             },
             "properties": {
                 "accountType": "[variables('storageAccountType')]"
@@ -186,7 +213,7 @@
                         "name": "[variables('natPoolName_l1')]",
                         "properties": {
                             "frontendIPConfiguration": {
-                                "id": "[variables('frontEndIPConfigID')]"
+                                "id": "[variables('frontEndIPConfigID_l1')]"
                             },
                             "protocol": "tcp",
                             "frontendPortRangeStart": 50000,
@@ -197,10 +224,10 @@
                 ],
                 "loadBalancingRules": [
                     {
-                        "name": "stream01",
+                        "name": "http",
                         "properties": {
                             "frontendIPConfiguration": {
-                                "id": "[variables('frontEndIPConfigID')]"
+                                "id": "[variables('frontEndIPConfigID_l1')]"
                             },
                             "backendAddressPool": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l1')), '/backendAddressPools/', variables('bePoolName_l1'))]"
@@ -209,26 +236,8 @@
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l1')), '/probes/lbprobe')]"
                             },
                             "protocol": "Tcp",
-                            "frontendPort": 5001,
-                            "backendPort": 5001,
-                            "idleTimeoutInMinutes": 15
-                        }
-                    },
-                    {
-                        "name": "stream02",
-                        "properties": {
-                            "frontendIPConfiguration": {
-                                "id": "[variables('frontEndIPConfigID')]"
-                            },
-                            "backendAddressPool": {
-                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l1')), '/backendAddressPools/', variables('bePoolName_l1'))]"
-                            },
-                            "probe": {
-                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l1')), '/probes/lbprobe')]"
-                            },
-                            "protocol": "Tcp",
-                            "frontendPort": 5002,
-                            "backendPort": 5002,
+                            "frontendPort": 80,
+                            "backendPort": 80,
                             "idleTimeoutInMinutes": 15
                         }
                     }
@@ -261,7 +270,7 @@
                         "name": "LoadBalancerFrontEnd",
                         "properties": {
                             "subnet": {
-                                "id": "[concat(variables('vnet_id'), '/subnets/', variables('subnetName'))]"
+                                "id": "[concat(variables('vnet_id'), '/subnets/', variables('subnet02name'))]"
                             },
                             "privateIPAllocationMethod": "Dynamic"
                         }
@@ -277,7 +286,7 @@
                         "name": "[variables('natPoolName_l2')]",
                         "properties": {
                             "frontendIPConfiguration": {
-                                "id": "[variables('frontEndIPConfigID')]"
+                                "id": "[variables('frontEndIPConfigID_l2')]"
                             },
                             "protocol": "tcp",
                             "frontendPortRangeStart": 50000,
@@ -291,7 +300,7 @@
                         "name": "stream01",
                         "properties": {
                             "frontendIPConfiguration": {
-                                "id": "[variables('frontEndIPConfigID')]"
+                                "id": "[variables('frontEndIPConfigID_l2')]"
                             },
                             "backendAddressPool": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
@@ -309,7 +318,7 @@
                         "name": "stream02",
                         "properties": {
                             "frontendIPConfiguration": {
-                                "id": "[variables('frontEndIPConfigID')]"
+                                "id": "[variables('frontEndIPConfigID_l2')]"
                             },
                             "backendAddressPool": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
@@ -320,6 +329,330 @@
                             "protocol": "Tcp",
                             "frontendPort": 5002,
                             "backendPort": 5002,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream03",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5003,
+                            "backendPort": 5003,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream04",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5004,
+                            "backendPort": 5004,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream05",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5005,
+                            "backendPort": 5005,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream06",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5006,
+                            "backendPort": 5006,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream07",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5007,
+                            "backendPort": 5007,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream08",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5008,
+                            "backendPort": 5008,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream09",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5009,
+                            "backendPort": 5009,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream10",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 5010,
+                            "backendPort": 5010,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream11",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6001,
+                            "backendPort": 6001,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream12",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6002,
+                            "backendPort": 6002,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream13",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6003,
+                            "backendPort": 6003,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream14",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6004,
+                            "backendPort": 6004,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream15",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6005,
+                            "backendPort": 6005,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream16",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6006,
+                            "backendPort": 6006,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream17",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6007,
+                            "backendPort": 6007,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream18",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6008,
+                            "backendPort": 6008,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream19",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6009,
+                            "backendPort": 6009,
+                            "idleTimeoutInMinutes": 15
+                        }
+                    },
+                    {
+                        "name": "stream20",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID_l2')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/backendAddressPools/', variables('bePoolName_l2'))]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName_l2')), '/probes/lbprobe')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 6010,
+                            "backendPort": 6010,
                             "idleTimeoutInMinutes": 15
                         }
                     }
@@ -340,7 +673,7 @@
         },
         {
             "type": "Microsoft.Compute/virtualMachineScaleSets",
-            "name": "[variables('vmscaleset_layer1name')]",
+            "name": "[variables('vmscalesetname_l1')]",
             "location": "[variables('location')]",
             "apiVersion": "2016-03-30",
             "tags": {
@@ -356,7 +689,7 @@
                 "capacity": "[parameters('instanceCount_layer1')]"
             },
             "properties": {
-                "overprovision": "true",
+                "overprovision": "false",
                 "upgradePolicy": {
                     "mode": "Manual"
                 },
@@ -377,7 +710,7 @@
                         "imageReference": "[variables('imageReference')]"
                     },
                     "osProfile": {
-                        "computerNamePrefix": "[variables('vmscaleset_layer1name')]",
+                        "computerNamePrefix": "[variables('vmscalesetname_l1')]",
                         "adminUsername": "[parameters('adminUsername')]",
                         "adminPassword": "[parameters('adminPassword')]"
                     },
@@ -392,7 +725,7 @@
                                             "name": "[variables('ipConfigName_l1')]",
                                             "properties": {
                                                 "subnet": {
-                                                    "id": "[concat(variables('vnet_id'), '/subnets/', variables('subnetName'))]"
+                                                    "id": "[concat(variables('vnet_id'), '/subnets/', variables('subnet01Name'))]"
                                                 },
                                                 "loadBalancerBackendAddressPools": [
                                                     {
@@ -421,7 +754,7 @@
                                     "typeHandlerVersion": "2.1",
                                     "autoUpgradeMinorVersion": true,
                                     "settings": {
-                                        "xmlCfg": "[base64(concat(variables('wadcfgxstart'), variables('wadmetricsresourceid'), variables('vmscaleset_layer1name'), variables('wadcfgxend')))]",
+                                        "xmlCfg": "[base64(concat(variables('wadcfgxstart'), variables('wadmetricsresourceid'), variables('vmscalesetname_l1'), variables('wadcfgxend')))]",
                                         "storageAccount": "[variables('diagnosticsStorageAccountName')]"
                                     },
                                     "protectedSettings": {
@@ -453,7 +786,7 @@
         },
         {
             "type": "Microsoft.Compute/virtualMachineScaleSets",
-            "name": "[variables('vmscaleset_layer2name')]",
+            "name": "[variables('vmscalesetname_l2')]",
             "location": "[variables('location')]",
             "apiVersion": "2016-03-30",
             "tags": {
@@ -461,7 +794,8 @@
             },
             "dependsOn": [
                 "storageLoop",
-                "[concat('Microsoft.Network/loadBalancers/', variables('loadBalancerName_l2'))]"
+                "[concat('Microsoft.Network/loadBalancers/', variables('loadBalancerName_l2'))]",
+                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('vmscalesetname_l1'))]"
             ],
             "sku": {
                 "name": "[parameters('vmSize_layer2')]",
@@ -469,7 +803,7 @@
                 "capacity": "[parameters('instanceCount_layer2')]"
             },
             "properties": {
-                "overprovision": "true",
+                "overprovision": "false",
                 "upgradePolicy": {
                     "mode": "Manual"
                 },
@@ -490,7 +824,7 @@
                         "imageReference": "[variables('imageReference')]"
                     },
                     "osProfile": {
-                        "computerNamePrefix": "[variables('vmscaleset_layer2name')]",
+                        "computerNamePrefix": "[variables('vmscalesetname_l2')]",
                         "adminUsername": "[parameters('adminUsername')]",
                         "adminPassword": "[parameters('adminPassword')]"
                     },
@@ -505,7 +839,7 @@
                                             "name": "[variables('ipConfigName_l2')]",
                                             "properties": {
                                                 "subnet": {
-                                                    "id": "[concat(variables('vnet_id'), '/subnets/', variables('subnetName'))]"
+                                                    "id": "[concat(variables('vnet_id'), '/subnets/', variables('subnet02Name'))]"
                                                 },
                                                 "loadBalancerBackendAddressPools": [
                                                     {
@@ -534,7 +868,7 @@
                                     "typeHandlerVersion": "2.1",
                                     "autoUpgradeMinorVersion": true,
                                     "settings": {
-                                        "xmlCfg": "[base64(concat(variables('wadcfgxstart'), variables('wadmetricsresourceid'), variables('vmscaleset_layer2name'), variables('wadcfgxend')))]",
+                                        "xmlCfg": "[base64(concat(variables('wadcfgxstart'), variables('wadmetricsresourceid'), variables('vmscalesetname_l2'), variables('wadcfgxend')))]",
                                         "storageAccount": "[variables('diagnosticsStorageAccountName')]"
                                     },
                                     "protectedSettings": {
@@ -560,6 +894,72 @@
                                 }
                             }
                         ]
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "[variables('apiVersion')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[variables('jumphostNicName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[variables('pipjumphost_id')]"
+                            },
+                            "subnet": {
+                                "id": "[concat(variables('vnet_id'), '/subnets/', variables('subnet03Name'))]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "[variables('apiVersion')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[variables('jumphostVmName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('jumphostStorageAccountName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('jumphostNicName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize_jumphost')]"
+                },
+                "osProfile": {
+                    "computerName": "[variables('jumphostVmName')]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": "[variables('imageReference')]",
+                    "osDisk": {
+                        "name": "osdisk",
+                        "vhd": {
+                            "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('jumphostStorageAccountName')), variables('apiVersion')).primaryEndpoints.blob, variables('jumphostStorageAccountName'),'/',variables('OSDiskName'),'.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('jumphostNicName'))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": "true",
+                        "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('jumphostStorageAccountName')), variables('apiVersion')).primaryEndpoints.blob)]"
                     }
                 }
             }
