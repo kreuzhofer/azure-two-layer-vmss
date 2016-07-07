@@ -37,12 +37,18 @@
     "variables": {
         "location": "[resourceGroup().location]",
         "vnetName": "[concat(parameters('deploymentPrefix'), '-vnet')]",
-        "subnetName": "[concat(parameters('deploymentPrefix'), '-subnet')]",
-        "dep01vnetPrefix": "10.0.0.0/16",
-        "dep01vnetSubnet1Prefix": "10.0.0.0/24",
+        "subnet01name": "[concat(parameters('deploymentPrefix'), '-subnet01')]",
+        "subnet02name": "[concat(parameters('deploymentPrefix'), '-subnet02')]",
+        "subnet03name": "[concat(parameters('deploymentPrefix'), '-subnet03')]",
+        "vnetPrefix": "10.249.0.0/24",
+        "subnet01Prefix": "10.249.0.192/26",
+        "subnet02Prefix": "10.249.0.128/26",
+        "subnet03Prefix": "10.249.0.64/26",
         "publicIPAddressName": "[concat(parameters('deploymentPrefix'), '-pip')]",
         "publicDomainName": "[concat(parameters('deploymentPrefix'), '-dns')]",
-        "keyVaultName": "[concat(parameters('deploymentPrefix'), '-keyvault')]"
+        "keyVaultName": "[concat(parameters('deploymentPrefix'), '-keyvault')]",
+        "publicIPAddressNameJumphost": "[concat(parameters('deploymentPrefix'), '-pipjh')]",
+        "publicDomainNameJumphost": "[concat(parameters('deploymentPrefix'), '-dnsjh')]"
     },
     "resources": [
         {
@@ -57,14 +63,26 @@
             "properties": {
                 "addressSpace": {
                     "addressPrefixes": [
-                        "[variables('dep01vnetPrefix')]"
+                        "[variables('vnetPrefix')]"
                     ]
                 },
                 "subnets": [
                     {
-                        "name": "[variables('subnetName')]",
+                        "name": "[variables('subnet01name')]",
                         "properties": {
-                            "addressPrefix": "[variables('dep01vnetSubnet1Prefix')]"
+                            "addressPrefix": "[variables('subnet01Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('subnet02name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnet02Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('subnet03name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnet03Prefix')]"
                         }
                     }
                 ]
@@ -82,6 +100,21 @@
                 "publicIPAllocationMethod": "Static",
                 "dnsSettings": {
                     "domainNameLabel": "[variables('publicDomainName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('publicIPAddressNameJumphost')]",
+            "location": "[variables('location')]",
+            "apiVersion": "2015-06-15",
+            "tags": {
+                "displayName": "PublicIPJumphost"
+            },
+            "properties": {
+                "publicIPAllocationMethod": "Static",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('publicDomainNameJumphost')]"
                 }
             }
         },
