@@ -834,11 +834,11 @@
                     "storageProfile": {
                         "osDisk": {
                             "vhdContainers": [
-                                "[concat('https://', variables('uniqueStringArray')[0], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[1], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[2], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[3], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[4], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]"
+                                "[concat('https://', variables('uniqueStringArray')[0], '.', variables('environment').blobEndpoint, '/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[1], '.', variables('environment').blobEndpoint, '/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[2], '.', variables('environment').blobEndpoint, '/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[3], '.', variables('environment').blobEndpoint, '/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[4], '.', variables('environment').blobEndpoint, '/', variables('vhdContainerName'))]"
                             ],
                             "name": "[variables('osDiskName')]",
                             "caching": "ReadOnly",
@@ -897,7 +897,7 @@
                                     "protectedSettings": {
                                         "storageAccountName": "[variables('diagnosticsStorageAccountName')]",
                                         "storageAccountKey": "[listkeys(variables('accountid'), '2015-06-15').key1]",
-                                        "storageAccountEndPoint": "https://core.windows.net"
+                                        "storageAccountEndPoint": "[concat('https://', variables('environment').blobEndpoint)]"
                                     }
                                 }
                             },
