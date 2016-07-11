@@ -1003,7 +1003,7 @@
                         "autoUpgradeMinorVersion": true,
                         "settings": {
                             "fileUris": [
-                                "[parameters('scriptLocation')]"
+                                "[parameters('scriptLocation-jh')]"
                             ],
                             "commandToExecute": "[concat('sh ', variables('installationScriptFileName_jh'))]"
                         }
