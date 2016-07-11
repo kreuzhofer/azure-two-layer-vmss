@@ -88,6 +88,12 @@
             "metadata": {
                 "description": "The command line parameters to pass into the installation script for layer 2 vmss"
             }
+        },
+        "scriptParameters_jh": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The command line parameters to pass into the installation script for the jumphost"
+            }
         }
     },
     "variables": {
