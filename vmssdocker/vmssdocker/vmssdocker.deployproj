@@ -26,7 +26,6 @@
   <!-- vertag<:>end -->
   <ItemGroup>
     <Folder Include="Scripts\" />
-    <Folder Include="Templates\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="CustomScripts\dockerinstallation.sh" />
@@ -34,6 +33,8 @@
       <Visible>False</Visible>
     </None>
     <Content Include="Scripts\Deploy-AzureResourceGroup.ps1" />
+    <Content Include="Templates\LinuxVirtualMachineScaleSet.germancloud.parameters.json" />
+    <Content Include="Templates\LinuxVirtualMachineScaleSet.azurecloud.parameters.json" />
     <Content Include="Templates\LinuxVirtualMachineScaleSet.json" />
     <Content Include="Templates\LinuxVirtualMachineScaleSet.parameters.json" />
   </ItemGroup>

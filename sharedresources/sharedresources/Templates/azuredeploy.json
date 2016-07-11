@@ -32,6 +32,12 @@
             "metadata": {
                 "description": "Parameters to pass into the installation script for layer 2"
             }
+        },
+        "installScriptParameters_jh": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Parameters to pass into the installation script for the jumphost"
+            }
         }
     },
     "variables": {
@@ -165,10 +171,25 @@
                     "dependsOn": [
                         "[concat('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]"
                     ]
+                },
+                {
+                    "type": "secrets",
+                    "name": "installScriptParameters-jh",
+                    "apiVersion": "2015-06-01",
+                    "properties": {
+                        "value": "[parameters('installScriptParameters_jh')]"
+                    },
+                    "dependsOn": [
+                        "[concat('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]"
+                    ]
                 }
             ]
         }
     ],
     "outputs": {
+        "keyvaultId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+        }
     }
 }

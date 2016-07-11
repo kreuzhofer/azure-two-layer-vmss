@@ -41,7 +41,7 @@
             "metadata": {
                 "description": "Number of VM instances in layer 1 (100 or less)"
             },
-            "minValue": 1,
+            "minValue": 0,
             "maxValue": 100
         },
         "instanceCount_layer2": {
@@ -49,7 +49,7 @@
             "metadata": {
                 "description": "Number of VM instances in layer 2 (100 or less)"
             },
-            "minValue": 1,
+            "minValue": 0,
             "maxValue": 100
         },
         "adminUsername": {
@@ -68,7 +68,13 @@
         "scriptLocation": {
             "type": "string",
             "metadata": {
-                "description": "Blob storage Link with SAS to the installation script"
+                "description": "Blob storage Link with SAS to the installation script for layer 1 and 2"
+            }
+        },
+        "scriptLocation-jh": {
+            "type": "string",
+            "metadata": {
+                "description": "Blob storage Link with SAS to the installation script for the Jumphost"
             }
         },
         "scriptParameters_l1": {
@@ -146,14 +152,15 @@
         "wadcfgxend": "[concat('\"><MetricAggregation scheduledTransferPeriod=\"PT1H\"/><MetricAggregation scheduledTransferPeriod=\"PT1M\"/></Metrics></DiagnosticMonitorConfiguration></WadCfg>')]",
 
         "keyVaultName": "[concat(parameters('deploymentPrefix'), '-keyvault')]",
-        "installationScriptFileName_l1": "[concat('run.sh',' ', parameters('scriptParameters_l1'))]",
-        "installationScriptFileName_l2": "[concat('run.sh',' ', parameters('scriptParameters_l2'))]",
+        "installationScriptFileName_l1": "[concat(parameters('scriptParameters_l1'))]",
+        "installationScriptFileName_l2": "[concat(parameters('scriptParameters_l2'))]",
 
         "jumphostStorageAccountName": "[concat(parameters('deploymentPrefix'), 'jumphostsa')]",
         "jumphostNicName": "[concat(parameters('deploymentPrefix'), 'jumphostnic')]",
         "_publicIPAddressNameJumphost": "[concat(parameters('deploymentPrefix'), '-pipjh')]",
         "pipjumphost_id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('sharedResourceGroup'), '/providers/Microsoft.Network/publicIPAddresses/', variables('_publicIPAddressNameJumphost'))]",
-        "jumphostVmName": "[concat(parameters('deploymentPrefix'), 'jumphost')]"
+        "jumphostVmName": "[concat(parameters('deploymentPrefix'), 'jumphost')]",
+        "installationScriptFileName_jh": "[concat(parameters('scriptParameters_jh'))]"
     },
     "resources": [
         {
@@ -697,11 +704,11 @@
                     "storageProfile": {
                         "osDisk": {
                             "vhdContainers": [
-                                "[concat('https://', variables('uniqueStringArray')[0], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[1], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[2], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[3], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[4], '.blob.core.windows.net/', variables('vhdContainerName'))]"
+                                "[concat('https://', variables('uniqueStringArray')[0], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[1], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[2], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[3], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[4], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]"
                             ],
                             "name": "[variables('osDiskName')]",
                             "caching": "ReadOnly",
@@ -794,8 +801,7 @@
             },
             "dependsOn": [
                 "storageLoop",
-                "[concat('Microsoft.Network/loadBalancers/', variables('loadBalancerName_l2'))]",
-                "[concat('Microsoft.Compute/virtualMachineScaleSets/', variables('vmscalesetname_l1'))]"
+                "[concat('Microsoft.Network/loadBalancers/', variables('loadBalancerName_l2'))]"
             ],
             "sku": {
                 "name": "[parameters('vmSize_layer2')]",
@@ -811,11 +817,11 @@
                     "storageProfile": {
                         "osDisk": {
                             "vhdContainers": [
-                                "[concat('https://', variables('uniqueStringArray')[0], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[1], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[2], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[3], '.blob.core.windows.net/', variables('vhdContainerName'))]",
-                                "[concat('https://', variables('uniqueStringArray')[4], '.blob.core.windows.net/', variables('vhdContainerName'))]"
+                                "[concat('https://', variables('uniqueStringArray')[0], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[1], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[2], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[3], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]",
+                                "[concat('https://', variables('uniqueStringArray')[4], '.blob.core.cloudapi.de/', variables('vhdContainerName'))]"
                             ],
                             "name": "[variables('osDiskName')]",
                             "caching": "ReadOnly",
@@ -962,7 +968,31 @@
                         "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('jumphostStorageAccountName')), variables('apiVersion')).primaryEndpoints.blob)]"
                     }
                 }
-            }
+            },
+            "resources": 
+            [
+                {
+                    "type": "Microsoft.Compute/virtualMachines/extensions",
+                    "name": "[concat(variables('jumphostVmName'),'/installcustomscript')]",
+                    "apiVersion": "[variables('apiVersion')]",
+                    "location": "[resourceGroup().location]",
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', variables('jumphostVmName'))]"
+                    ],
+                    "properties": {
+                        "publisher": "Microsoft.OSTCExtensions",
+                        "type": "CustomScriptForLinux",
+                        "typeHandlerVersion": "1.5",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                            "fileUris": [
+                                "[parameters('scriptLocation')]"
+                            ],
+                            "commandToExecute": "[concat('sh ', variables('installationScriptFileName_jh'))]"
+                        }
+                    }
+                }
+            ]
         }
     ]
 }
